@@ -1,0 +1,46 @@
+name: Android APK
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract Kotlin Android project
+        run: unzip -o source.zip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build and lint
+        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
+      - name: Check debug APK signature and manifest
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='ru.iqoo.camera'"
+          cp "$APK" iqoo13-camera-v0.1.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iqoo13-camera-apk
+          path: iqoo13-camera-v0.1.0.apk
+          retention-days: 7
+      - name: Publish release APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.1.0 iqoo13-camera-v0.1.0.apk source.zip             --title 'iQOO 13 Video Camera v0.1.0'             --notes 'Experimental build. Not yet tested on a physical iQOO 13. Camera2 SDR + MP4 + diagnostics. Signed with a standard debug keystore.'             --prerelease
