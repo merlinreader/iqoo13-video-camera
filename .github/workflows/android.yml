@@ -28,22 +28,26 @@ jobs:
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
           test -n "$SDKMANAGER"
           "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
-      - name: Build and lint
-        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
-      - name: Check debug APK signature and manifest
+      - name: Unit tests, signed debug APK and Android Lint
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+      - name: Check debug APK signature, manifest and version
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='ru.iqoo.camera'"
-          cp "$APK" iqoo13-camera-v0.1.0.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "versionName='0.1.1'"
+          cp "$APK" iqoo13-camera-v0.1.1.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: iqoo13-camera-apk
-          path: iqoo13-camera-v0.1.0.apk
+          name: iqoo13-camera-v0.1.1-apk
+          path: iqoo13-camera-v0.1.1.apk
           retention-days: 7
-      - name: Publish release APK
+      - name: Publish release after all checks
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.1.0 iqoo13-camera-v0.1.0.apk source.zip             --title 'iQOO 13 Video Camera v0.1.0'             --notes 'Experimental build. Not yet tested on a physical iQOO 13. Camera2 SDR + MP4 + diagnostics. Signed with a standard debug keystore.'             --prerelease
+          gh release create v0.1.1 iqoo13-camera-v0.1.1.apk source.zip \
+            --title 'iQOO 13 Video Camera v0.1.1: Preview Geometry Fix' \
+            --notes 'Camera2 preview orientation and aspect ratio corrected. MP4 recording pipeline unchanged. Kotlin geometry unit tests, Android Lint and APK signature verification passed in CI. Not yet verified on physical iQOO 13. Previous v0.1.0 debug signature differs: uninstall previous APK before installing this one if Android reports a signature conflict; gallery recordings remain.' \
+            --prerelease
